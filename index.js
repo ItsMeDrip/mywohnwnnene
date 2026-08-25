@@ -1,28 +1,3 @@
-
-
-const net = require('net')
-
-const testSocket = new net.Socket()
-
-console.log('Testing raw TCP connection to Minecraft...')
-
-testSocket.setTimeout(10000)
-
-testSocket.connect(15401, 'BlixxPloits.aternos.me', () => {
-  console.log('🔥 RAW TCP CONNECTION SUCCESS!')
-  testSocket.destroy()
-})
-
-testSocket.on('timeout', () => {
-  console.log('❌ RAW TCP CONNECTION TIMED OUT')
-  testSocket.destroy()
-})
-
-testSocket.on('error', (err) => {
-  console.log('❌ RAW TCP ERROR:', err.message)
-})
-
-
 const http = require('http')
 const mineflayer = require('mineflayer')
 
@@ -40,8 +15,14 @@ const CONFIG = {
   version: '1.20.1',
 
   reconnectDelay: 5000,
-  antiAfkDelay: 30000,
-  connectionTimeout: 20000
+
+  // Authentication
+  authDelay: 3000,
+  loginDelay: 2500,
+
+  // Movement
+  movementInterval: 5000,
+  jumpInterval: 12000
 }
 
 // ========================================
@@ -65,7 +46,8 @@ http.createServer((req, res) => {
 // ========================================
 
 let reconnecting = false
-let antiAfkInterval = null
+let movementInterval = null
+let jumpInterval = null
 
 // ========================================
 // CREATE BOT
@@ -88,22 +70,15 @@ function createBot() {
     username: CONFIG.username,
     version: CONFIG.version,
     auth: 'offline',
-    connectTimeout: CONFIG.connectionTimeout
+    connectTimeout: 30000
   })
 
-  let connected = false
-  let finished = false
-
   // ========================================
-  // LOGIN / CONNECTION
+  // MINECRAFT LOGIN
   // ========================================
 
   bot.on('login', () => {
-    connected = true
-
-    console.log('')
     console.log('Minecraft connection established! ✅')
-    console.log('Waiting for server spawn...')
   })
 
   // ========================================
@@ -111,18 +86,89 @@ function createBot() {
   // ========================================
 
   bot.on('spawn', () => {
-    console.log('')
     console.log('BOT SPAWNED! 🎉')
-    console.log('Bot is now in the Minecraft server.')
 
-    if (antiAfkInterval) {
-      clearInterval(antiAfkInterval)
-    }
+    // ----------------------------------------
+    // AUTHME
+    // ----------------------------------------
 
-    antiAfkInterval = setInterval(() => {
+    setTimeout(() => {
       if (!bot.entity) return
 
-      console.log('Anti-AFK jump')
+      console.log('Trying AuthMe registration...')
+
+      bot.chat(
+        `/register ${CONFIG.password} ${CONFIG.password}`
+      )
+
+      console.log('Sent: /register <password> <password>')
+
+      // Login after registration attempt
+      setTimeout(() => {
+        if (!bot.entity) return
+
+        console.log('Trying AuthMe login...')
+
+        bot.chat(`/login ${CONFIG.password}`)
+
+        console.log('Sent: /login <password>')
+      }, CONFIG.loginDelay)
+
+    }, CONFIG.authDelay)
+
+    // ----------------------------------------
+    // RANDOM MOVEMENT
+    // ----------------------------------------
+
+    if (movementInterval) {
+      clearInterval(movementInterval)
+    }
+
+    movementInterval = setInterval(() => {
+      if (!bot.entity) return
+
+      const directions = [
+        'forward',
+        'back',
+        'left',
+        'right'
+      ]
+
+      const direction =
+        directions[Math.floor(Math.random() * directions.length)]
+
+      console.log(`Moving ${direction}`)
+
+      // Stop previous movement
+      bot.clearControlStates()
+
+      // Move in random direction
+      bot.setControlState(direction, true)
+
+      // Random movement duration
+      const duration =
+        Math.floor(Math.random() * 3000) + 2000
+
+      setTimeout(() => {
+        if (!bot.entity) return
+
+        bot.setControlState(direction, false)
+      }, duration)
+
+    }, CONFIG.movementInterval)
+
+    // ----------------------------------------
+    // RANDOM JUMPING
+    // ----------------------------------------
+
+    if (jumpInterval) {
+      clearInterval(jumpInterval)
+    }
+
+    jumpInterval = setInterval(() => {
+      if (!bot.entity) return
+
+      console.log('Jumping')
 
       bot.setControlState('jump', true)
 
@@ -132,61 +178,25 @@ function createBot() {
         }
       }, 500)
 
-    }, CONFIG.antiAfkDelay)
+    }, CONFIG.jumpInterval)
   })
 
   // ========================================
-  // AUTHME CHAT
+  // SERVER MESSAGES
+  // ========================================
+
+  bot.on('messagestr', (message) => {
+    console.log(`[SERVER] ${message}`)
+  })
+
+  // ========================================
+  // PLAYER CHAT
   // ========================================
 
   bot.on('chat', (username, message) => {
     if (username === bot.username) return
 
     console.log(`[CHAT] ${username}: ${message}`)
-
-    const msg = message.toLowerCase()
-
-    // ----------------------------------------
-    // REGISTER
-    // ----------------------------------------
-
-    if (
-      msg.includes('register') &&
-      !msg.includes('login')
-    ) {
-      console.log('AuthMe registration detected!')
-
-      setTimeout(() => {
-        if (!bot.entity) return
-
-        bot.chat(
-          `/register ${CONFIG.password} ${CONFIG.password}`
-        )
-
-        console.log('Sent: /register <password> <password>')
-      }, 1000)
-
-      return
-    }
-
-    // ----------------------------------------
-    // LOGIN
-    // ----------------------------------------
-
-    if (
-      msg.includes('login') ||
-      msg.includes('log in')
-    ) {
-      console.log('AuthMe login detected!')
-
-      setTimeout(() => {
-        if (!bot.entity) return
-
-        bot.chat(`/login ${CONFIG.password}`)
-
-        console.log('Sent: /login <password>')
-      }, 1000)
-    }
   })
 
   // ========================================
@@ -220,41 +230,10 @@ function createBot() {
   // ========================================
 
   bot.on('end', () => {
-    console.log('')
-    console.log('BOT CONNECTION ENDED')
+    console.log('Bot disconnected.')
 
     reconnect('Disconnected')
   })
-
-  // ========================================
-  // CONNECTION TIMEOUT
-  // ========================================
-
-  setTimeout(() => {
-    if (!connected && !finished) {
-      console.log('')
-      console.log('========================================')
-      console.log('CONNECTION TIMEOUT ❌')
-      console.log(`Could not connect within ${CONFIG.connectionTimeout / 1000} seconds.`)
-      console.log('')
-      console.log(`Server: ${CONFIG.host}:${CONFIG.port}`)
-      console.log('')
-      console.log('CHECK:')
-      console.log('1. Is the Aternos server ONLINE?')
-      console.log('2. Is the IP correct?')
-      console.log('3. Is the PORT correct?')
-      console.log('4. Is the server running Minecraft 1.20.1?')
-      console.log('========================================')
-
-      finished = true
-
-      try {
-        bot.end()
-      } catch (err) {
-        console.log('Could not close bot connection.')
-      }
-    }
-  }, CONFIG.connectionTimeout + 1000)
 }
 
 // ========================================
@@ -262,18 +241,20 @@ function createBot() {
 // ========================================
 
 function reconnect(reason) {
-  if (reconnecting) {
-    return
-  }
+  if (reconnecting) return
 
   reconnecting = true
 
-  if (antiAfkInterval) {
-    clearInterval(antiAfkInterval)
-    antiAfkInterval = null
+  if (movementInterval) {
+    clearInterval(movementInterval)
+    movementInterval = null
   }
 
-  console.log('')
+  if (jumpInterval) {
+    clearInterval(jumpInterval)
+    jumpInterval = null
+  }
+
   console.log(
     `${reason}, reconnecting in ${CONFIG.reconnectDelay / 1000} seconds...`
   )
@@ -287,9 +268,6 @@ function reconnect(reason) {
 // START
 // ========================================
 
-console.log('')
-console.log('========================================')
 console.log('Drippy Mineflayer Bot starting...')
-console.log('========================================')
 
 createBot()
