@@ -1,35 +1,58 @@
-
-
 const http = require('http')
+const mineflayer = require('mineflayer')
 
-const PORT = process.env.PORT || 10000
+// =========================
+// RENDER WEB SERVER
+// =========================
+
+const WEB_PORT = process.env.PORT || 10000
 
 http.createServer((req, res) => {
-  res.writeHead(200)
+  res.writeHead(200, {
+    'Content-Type': 'text/plain'
+  })
+
   res.end('Drippy Mineflayer Bot is online!')
-}).listen(PORT, '0.0.0.0', () => {
-  console.log(`Web server running on port ${PORT}`)
+}).listen(WEB_PORT, '0.0.0.0', () => {
+  console.log(`Web server running on port ${WEB_PORT}`)
 })
 
-
-
-
-
-const mineflayer = require('mineflayer')
+// =========================
+// BOT CONFIG
+// =========================
 
 const CONFIG = {
   host: 'BlixxPloits.aternos.me',
   port: 15401,
+
   username: '_LimitedVoid',
   password: 'devdevdev',
-  version: '1.20.1'
+
+  version: '1.20.1',
+
+  reconnectDelay: 5000,
+  antiAfkDelay: 30000
 }
+
+// =========================
+// VARIABLES
+// =========================
 
 let reconnecting = false
 let antiAfkInterval = null
 
+// =========================
+// CREATE BOT
+// =========================
+
 function createBot() {
   reconnecting = false
+
+  console.log('================================')
+  console.log('Starting Mineflayer bot...')
+  console.log(`Server: ${CONFIG.host}:${CONFIG.port}`)
+  console.log(`Username: ${CONFIG.username}`)
+  console.log('================================')
 
   const bot = mineflayer.createBot({
     host: CONFIG.host,
@@ -39,23 +62,39 @@ function createBot() {
     auth: 'offline'
   })
 
-  function reconnect(reason) {
-    if (reconnecting) return
-    reconnecting = true
+  // =========================
+  // CONNECTING
+  // =========================
 
-    if (antiAfkInterval) {
-      clearInterval(antiAfkInterval)
-      antiAfkInterval = null
-    }
+  bot.on('connecting', () => {
+    console.log('Connecting to Minecraft server...')
+  })
 
-    console.log(`${reason}, reconnecting in 5 seconds...`)
-    setTimeout(createBot, 5000)
-  }
+  // =========================
+  // LOGIN PACKET
+  // =========================
+
+  bot.on('login', () => {
+    console.log('Minecraft connection established!')
+  })
+
+  // =========================
+  // SPAWN
+  // =========================
 
   bot.on('spawn', () => {
-    console.log('Bot spawned!')
+    console.log('BOT SPAWNED! 🎉')
+
+    // Start anti-AFK
+    if (antiAfkInterval) {
+      clearInterval(antiAfkInterval)
+    }
 
     antiAfkInterval = setInterval(() => {
+      if (!bot.entity) return
+
+      console.log('Anti-AFK jump')
+
       bot.setControlState('jump', true)
 
       setTimeout(() => {
@@ -63,8 +102,13 @@ function createBot() {
           bot.setControlState('jump', false)
         }
       }, 500)
-    }, 30000)
+
+    }, CONFIG.antiAfkDelay)
   })
+
+  // =========================
+  // CHAT / AUTHME
+  // =========================
 
   bot.on('chat', (username, message) => {
     if (username === bot.username) return
@@ -73,37 +117,97 @@ function createBot() {
 
     const msg = message.toLowerCase()
 
-    // AuthMe registration request
+    // REGISTER
     if (
       msg.includes('register') &&
       !msg.includes('login')
     ) {
-      console.log('AuthMe wants registration...')
-      bot.chat(`/register ${CONFIG.password} ${CONFIG.password}`)
+      console.log('AuthMe registration detected!')
+
+      setTimeout(() => {
+        bot.chat(`/register ${CONFIG.password} ${CONFIG.password}`)
+        console.log('Sent /register command')
+      }, 1000)
+
+      return
     }
 
-    // AuthMe login request
+    // LOGIN
     if (
       msg.includes('login') ||
       msg.includes('log in')
     ) {
-      console.log('AuthMe wants login...')
-      bot.chat(`/login ${CONFIG.password}`)
+      console.log('AuthMe login detected!')
+
+      setTimeout(() => {
+        bot.chat(`/login ${CONFIG.password}`)
+        console.log('Sent /login command')
+      }, 1000)
     }
   })
 
+  // =========================
+  // KICKED
+  // =========================
+
   bot.on('kicked', (reason) => {
-    console.log('Bot was kicked:', reason)
+    console.log('================================')
+    console.log('BOT KICKED')
+    console.log(reason)
+    console.log('================================')
+
     reconnect('Kicked')
   })
 
+  // =========================
+  // ERROR
+  // =========================
+
   bot.on('error', (err) => {
-    console.log('Error:', err.message)
+    console.log('================================')
+    console.log('MINEFLAYER ERROR')
+    console.log(err.message)
+    console.log('================================')
   })
 
+  // =========================
+  // DISCONNECTED
+  // =========================
+
   bot.on('end', () => {
+    console.log('Bot disconnected.')
+
     reconnect('Disconnected')
   })
 }
+
+// =========================
+// RECONNECT
+// =========================
+
+function reconnect(reason) {
+  if (reconnecting) return
+
+  reconnecting = true
+
+  if (antiAfkInterval) {
+    clearInterval(antiAfkInterval)
+    antiAfkInterval = null
+  }
+
+  console.log(
+    `${reason}, reconnecting in ${CONFIG.reconnectDelay / 1000} seconds...`
+  )
+
+  setTimeout(() => {
+    createBot()
+  }, CONFIG.reconnectDelay)
+}
+
+// =========================
+// START BOT
+// =========================
+
+console.log('Drippy Mineflayer Bot starting...')
 
 createBot()
