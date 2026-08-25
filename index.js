@@ -1,3 +1,28 @@
+
+
+const net = require('net')
+
+const testSocket = new net.Socket()
+
+console.log('Testing raw TCP connection to Minecraft...')
+
+testSocket.setTimeout(10000)
+
+testSocket.connect(15401, 'BlixxPloits.aternos.me', () => {
+  console.log('🔥 RAW TCP CONNECTION SUCCESS!')
+  testSocket.destroy()
+})
+
+testSocket.on('timeout', () => {
+  console.log('❌ RAW TCP CONNECTION TIMED OUT')
+  testSocket.destroy()
+})
+
+testSocket.on('error', (err) => {
+  console.log('❌ RAW TCP ERROR:', err.message)
+})
+
+
 const http = require('http')
 const mineflayer = require('mineflayer')
 
