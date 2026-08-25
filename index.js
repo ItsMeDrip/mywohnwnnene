@@ -35,7 +35,7 @@ const CONFIG = {
   port: 15401,
 
   username: 'LimitedIsTheVoid',
-  password: 'CHANGE_YOUR_PASSWORD',
+  password: 'devdevdev',
 
   version: '1.20.1',
 
