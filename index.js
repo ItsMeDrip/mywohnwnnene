@@ -34,7 +34,7 @@ const CONFIG = {
   host: 'BlixxPloits.aternos.me',
   port: 15401,
 
-  username: '_LimitedVoid',
+  username: 'LimitedIsTheVoid',
   password: 'CHANGE_YOUR_PASSWORD',
 
   version: '1.20.1',
